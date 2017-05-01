@@ -1,8 +1,10 @@
 import numpy as np
+from math import tanh
+
 import matplotlib.pyplot as plt
+from Parser import parse_ej2
 
-
-#Funciones de activacion y sus derivadas, agregar mas.
+#Funciones de activacion y sus derivadas, agregar mas. ----------------------------------------------------------------
 def ReLU(x):
     return np.maximum(x, 0, x)
 
@@ -11,17 +13,22 @@ def derivative_ReLU(x, epsilon=0.1):
     gradients[gradients == 0] = epsilon
     return gradients
 
+def tanh_deriv(x):
+    return (1 - tanh(x)**2)
+
 def binary_sigmoidal(x):
 	return 1.0 / (1 + np.exp(-1 * x))
 
 def binary_sigmoidal_derivative(x):
 	return binary_sigmoidal(x) * (1 - binary_sigmoidal(x))
+#----------------------------------------------------------------------------------------------------------------------
 
+#TODO sacar?
 def areConsistentLayersSpecs(pattern_size, hidden_layers_specs):
 	
 	if len(hidden_layers_specs) == 0:
 		raise ValueError("There must be at least one Hidden Layer.")
-
+	"""
 	if pattern_size != hidden_layers_specs[0].perceptrons_input_size:
 		raise ValueError("Pattern Size must be equals to First Hidden Layer Perceptron's Input Size.")
 
@@ -37,25 +44,30 @@ def areConsistentLayersSpecs(pattern_size, hidden_layers_specs):
 
 class HiddenLayerSpecs(object):
 
-	def __init__(self, perceptrons_count, perceptron_input_size):     
+	def __init__(self, perceptrons_count, perceptron_input_size):
 
 		self.perceptrons_count = perceptrons_count
 		self.perceptrons_input_size = perceptron_input_size
-
+	"""
 
 class PerceptronMulticapa(object):
 
 		def __init__(self, pattern_size, hidden_layers_specs, output_size):     
 	
 			self.pattern_size = pattern_size
-			
-			self.hidden_layers_Ws = [ [np.random.rand(1 + layer_specs.perceptrons_input_size) for _ in range(0,layer_specs.perceptrons_count) ] for layer_specs in hidden_layers_specs]
+
+			input_size = lambda l: hidden_layers_specs[l-1] if l > 0 else pattern_size
+			self.hidden_layers_Ws = [ [np.random.rand(1 + input_size(layer_ind)) for _ in range(0,layer_specs) ] for layer_ind, layer_specs in enumerate(hidden_layers_specs)]
 
 			last_hidden_layer_specs = hidden_layers_specs[-1] 
-			self.output_layer_W = [np.random.rand(1 + last_hidden_layer_specs.perceptrons_count) for _ in range(0, output_size)]
+			self.output_layer_W = [np.random.rand(1 + last_hidden_layer_specs) for _ in range(0, output_size)]
 			
 
 		def train(self, X, Y, activation_fx, activation_fx_derivative, eta=0.1, epochs=10000, epsilon=0.1):
+
+			#agrega -1 a cada patron en x para el bias
+			for input in X:
+				input.append(-1)
 
 			self.eta = eta
 			self.epochs = epochs
@@ -64,12 +76,14 @@ class PerceptronMulticapa(object):
 					V = self.calculate_V(x, activation_fx)
 
 					self.back_propagation(V, expected, activation_fx_derivative)
-			error = 0 
-			for a, EXPECTED in zip(X,Y):
+
+		def out(self, X, Y, activation_fx):
+			error = 0
+			for a, EXPECTED in zip(X, Y):
 				V = self.calculate_V(a, activation_fx)
 				V_M = V[-1]
 				print(V_M)
-							
+
 			return self
 
 		def calculate_V(self, x, activation_function):
@@ -109,15 +123,23 @@ class PerceptronMulticapa(object):
 
 
 					self.hidden_layers_Ws[hidden_layer_index] += (self.eta * np.outer(current_deltas, V_i_minus_1))
-					
-pattern_size = 3
+
 #Los input size de los perceptrones no consideran el bias. (CANTIDAD_PERCEPTRONES, CANTIDAD_DE_ENTRADAS_SIN_BIAS_X_PPN)
-hidden_layer_specs = [HiddenLayerSpecs(2, 2)]
-#Lo necesario para el XOR.
-ppm = PerceptronMulticapa(pattern_size, hidden_layer_specs, 1)
 
+#para testear localmente o con el e2 posta
+if True:
+	hidden_layer_specs = [2, 3]
+	#Lo necesario para el XOR.
 
-X = [(-1,0,0), (-1,0,1), (-1,1,0) , (-1, 1,1)]
-Y = [[0],[1],[1],[0]]
+	X = [[0,0], [0,1], [1,0], [1,1]]
+	Y = [[0],[1],[1],[0]]
 
-ppm.train(X, Y, binary_sigmoidal, binary_sigmoidal_derivative)
+	ppm = PerceptronMulticapa(len(X[0]), hidden_layer_specs, len(Y[0]))
+	ppm.train(X, Y, binary_sigmoidal, binary_sigmoidal_derivative)
+	ppm.out(X, Y, binary_sigmoidal)
+else:
+	X, Y = parse_ej2()
+	hidden_layer_specs = [2, 2]
+	ppm = PerceptronMulticapa(len(X[0]), hidden_layer_specs, len(Y[0]))
+	ppm.train(X, Y, binary_sigmoidal, binary_sigmoidal_derivative)
+	ppm.out(X, Y, binary_sigmoidal)
