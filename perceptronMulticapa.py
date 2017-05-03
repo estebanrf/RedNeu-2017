@@ -125,8 +125,11 @@ def derivative_ReLU(x, epsilon=0.1):
     gradients[gradients == 0] = epsilon
     return gradients
 
-def tanh_deriv(x):
-    return (1 - tanh(x)**2)
+def v_tanh(x): #redefinida para soportar vectores
+	return map(tanh, x)
+
+def v_tanh_deriv(x):
+    return map(lambda v: 1 - tanh(v)**2, x)
 
 def binary_sigmoidal(x):
 	return 1.0 / (1 + np.exp(-2 * x))
@@ -173,7 +176,7 @@ else:
 
 
 #Inicializamos perceptron,
-hidden_layers = [Layer(len(X[0]), 20, binary_sigmoidal, binary_sigmoidal_derivative, True)]
+hidden_layers = [Layer(len(X[0]), 20, v_tanh, v_tanh_deriv, True)]
 output_layer = Layer(21, 2, lambda x: x,  lambda x: 1, True)
 ppm = PerceptronMulticapa(len(X[0]), hidden_layers, output_layer)
 
