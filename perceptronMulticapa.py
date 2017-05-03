@@ -8,12 +8,15 @@ from Parser import parse_ej2
 
 class TrainingSpecs(object):
 
-	def __init__(self, eta, epochs, epsilon, must_train_in_training_set_order):
+	def __init__(self, eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia):
 
 		self.eta = eta
 		self.epochs = epochs
 		self.epsilon = epsilon
 		self.must_train_in_training_set_order = must_train_in_training_set_order
+		if momentum_inertia < 0 or momentum_inertia > 1:
+			raise ValueError("Momentum inertia must be in [0,1]")
+ 		self.momentum_inertia = momentum_inertia
 
 class Layer(object):
 
@@ -28,6 +31,7 @@ class Layer(object):
 			self.neurons_matrix = np.random.uniform(0.0, 1.0, (layer_input_size, neurons_count))
 		else:
 			self.neurons_matrix = np.random.rand((layer_input_size, neurons_count))
+		self.previous_momentum_neurons_matrix = np.zeros((layer_input_size, neurons_count))
 
 class PerceptronMulticapa(object):
 
@@ -47,6 +51,7 @@ class PerceptronMulticapa(object):
 
 			self.eta = training_specs.eta
 			self.epochs = training_specs.epochs
+			self.momentum_inertia = training_specs.momentum_inertia
 			training_set = zip(X, Y)
 
 			training_error_by_epoch = []
@@ -103,7 +108,10 @@ class PerceptronMulticapa(object):
 			error  = np.subtract(expected,V_M)
 			current_delta = np.multiply(self.output_layer.activation_fx_derivative(np.dot(V_M_minus_1, self.output_layer.neurons_matrix)), error)
 			propagation = np.dot(current_delta, np.transpose(self.output_layer.neurons_matrix[1:]))
-			self.output_layer.neurons_matrix += self.eta * np.outer(V_M_minus_1, current_delta)
+
+			delta_W = (1 if self.momentum_inertia == 0 else -1) * self.eta * np.outer(V_M_minus_1, current_delta) + (self.momentum_inertia * self.output_layer.previous_momentum_neurons_matrix)
+			self.output_layer.neurons_matrix += delta_W
+			self.output_layer.previous_momentum_neurons_matrix = delta_W
 			V_index = -2
 
 			for hidden_layer in reversed(self.hidden_layers):
@@ -113,8 +121,13 @@ class PerceptronMulticapa(object):
 				V_i_minus_1 = V[V_index - 1]
 				current_delta = np.multiply(hidden_layer.activation_fx_derivative(np.dot(V_i_minus_1, hidden_layer.neurons_matrix)), propagation)
 				propagation = np.dot(current_delta, np.transpose(hidden_layer.neurons_matrix[1:]))
-				hidden_layer.neurons_matrix += self.eta * np.outer(V_i_minus_1, current_delta)
+				delta_W = (1 if self.momentum_inertia == 0 else -1) * self.eta * np.outer(V_i_minus_1, current_delta) + (self.momentum_inertia * hidden_layer.previous_momentum_neurons_matrix)
+				hidden_layer.neurons_matrix += delta_W
+
+				hidden_layer.previous_momentum_neurons_matrix = delta_W
+
 				V_index = V_index - 1
+			
 
 #Funciones de activacion y sus derivadas, agregar mas. ----------------------------------------------------------------
 def ReLU(x):
@@ -132,6 +145,7 @@ def v_tanh_deriv(x):
     return map(lambda v: 1 - tanh(v)**2, x)
 
 def binary_sigmoidal(x):
+	
 	return 1.0 / (1 + np.exp(-2 * x))
 
 def binary_sigmoidal_derivative(x):
@@ -157,14 +171,14 @@ def are_consistent_layers_specs(pattern_size, hidden_layers_specs):
 		curr = nextl
 #----------------------------------------------------------------------------------------------------------------------
 
-training_specs = TrainingSpecs(0.001, 600, 0.01, True)
+training_specs = TrainingSpecs(0.01, 2000, 0.01, True, 0)
 training_error_by_epoch = []
 validation_error = -1
 X = []
 Y = []
 
 #para testear localmente paridad o con el ejercicio 2
-if False:
+if True:
 	#Lo necesario para el XOR.
 	X = [[-1,0,0,0], [-1,0,1,0], [-1,1,0,0] , [-1, 1,1,0], [-1,0,0,1], [-1,0,1,1], [-1,1,0,1] , [-1, 1,1,1]]
 	Y = [[0],[1],[1],[0],[1],[0],[0],[1]]
@@ -176,13 +190,13 @@ else:
 
 
 #Inicializamos perceptron,
-hidden_layers = [Layer(len(X[0]), 20, v_tanh, v_tanh_deriv, True)]
-output_layer = Layer(21, 2, lambda x: x,  lambda x: 1, True)
+hidden_layers = [Layer(len(X[0]), 2, binary_sigmoidal, binary_sigmoidal_derivative, True)]
+output_layer = Layer(3, 1, binary_sigmoidal,  binary_sigmoidal_derivative, True)
 ppm = PerceptronMulticapa(len(X[0]), hidden_layers, output_layer)
 
 #Entrenamos y validamos.
-training_error_by_epoch = ppm.train(X[:20], Y[:20], training_specs)
-validation_error = ppm.validate(X[:20], Y[:20])
+training_error_by_epoch = ppm.train(X, Y, training_specs)
+validation_error = ppm.validate(X, Y)
 
 # Plot de error de entrenamiento
 plt.plot(range(1, len(training_error_by_epoch)+1), training_error_by_epoch, marker='o')
