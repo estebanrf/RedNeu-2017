@@ -3,7 +3,7 @@ from math import tanh
 from random import shuffle
 
 import matplotlib.pyplot as plt
-from Parser import parse_ej2, normalize_standarize, normalize_minmax
+from Parser import parse_ej1, parse_ej2, normalize_standarize, normalize_minmax
 
 class TrainingSpecs(object):
 
@@ -164,27 +164,21 @@ def are_consistent_layers_specs(pattern_size, hidden_layers_specs):
 		curr = nextl
 #----------------------------------------------------------------------------------------------------------------------
 # eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia
-training_specs = TrainingSpecs(0.1, 1000, 0.00001, True, 0.7)
+training_specs = TrainingSpecs(0.1, 1000, 0.00001, True, 0)
 training_error_by_epoch = []
 validation_error = -1
 
 #para testear localmente paridad o con el ejercicio 2
-if True:
+EJERCICIO = 1
+if EJERCICIO == 0:
 	#Lo necesario para el XOR.
 	X_tr = X_valid = [[-1,0,0,0], [-1,0,1,0], [-1,1,0,0] , [-1, 1,1,0],
 		 [-1,0,0,1], [-1,0,1,1], [-1,1,0,1] , [-1, 1,1,1]]
 	Y_tr = Y_valid = [[0],[1],[1],[0],[1],[0],[0],[1]]
+elif EJERCICIO == 1:
+	X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej1(percent_train=80, percent_valid=10, f_normalize=None)
 else:
-
-	def norm(X,Y):
-		vector_divisor_X = np.array([1, 1000, 1000, 1000, 10, 10, 1, 10])
-		vector_divisor_Y = np.array([100, 100])
-		X = X / vector_divisor_X
-		Y = Y / vector_divisor_Y
-		return X, Y
-
-	X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=70, percent_valid=10, f_normalize=None)
-
+    X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=80, percent_valid=10, f_normalize=None)
 
 #Inicializamos perceptron,
 hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]

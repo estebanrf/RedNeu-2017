@@ -31,7 +31,7 @@ def parse_ej1(percent_train, percent_valid, f_normalize=None):
     lists = [line.split(',') for line in lines]
     parsed_values = [map(float, x[1:]) for x in lists]
     # el primero tiene 'M o 'B'
-    parsed_expected = [[0,1] if x[0] == 'M' else [1,0] for x in lists]
+    parsed_expected = [[0] if x[0] == 'M' else [1] for x in lists]
     validate_input(parsed_values)
     if f_normalize is not None:
         f_normalize(parsed_values, parsed_expected)
