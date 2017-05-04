@@ -19,7 +19,7 @@ def _split_input(X, Y, percent_train, percent_valid):
 
     return X_train, Y_train, X_valid, Y_valid, X_test, Y_test
 
-def parse_ej1(percent_train, percent_valid, f_normalize=None):
+def parse_ej1(percent_train, percent_valid, f_normalize_X=None, f_normalize_Y=None):
     def validate_input(i):
         for x in i:
             if len(x) != 10:
@@ -33,12 +33,14 @@ def parse_ej1(percent_train, percent_valid, f_normalize=None):
     # el primero tiene 'M o 'B'
     parsed_expected = [[0] if x[0] == 'M' else [1] for x in lists]
     validate_input(parsed_values)
-    if f_normalize is not None:
-        f_normalize(parsed_values, parsed_expected)
+    if f_normalize_X is not None:
+        f_normalize_X(parsed_values)
+    if f_normalize_Y is not None:
+        f_normalize_Y(parsed_expected)
     parsed_values = map(lambda x: insert(x, 0, -1), parsed_values)
     return _split_input(parsed_values, parsed_expected, percent_train, percent_valid)
 
-def parse_ej2(percent_train, percent_valid, f_normalize=None):
+def parse_ej2(percent_train, percent_valid, f_normalize_X=None, f_normalize_Y=None):
     def validate_input(i):
         for x in i:
             if len(x) != 8:
@@ -53,14 +55,17 @@ def parse_ej2(percent_train, percent_valid, f_normalize=None):
     parsed_values = [map(float, x[:-2]) for x in lists]
     parsed_expected = [[float(x[-1]),float(x[-2])] for x in lists]
     validate_input(parsed_values)
-    if f_normalize is not None:
-        parsed_values, parsed_expected = f_normalize(parsed_values, parsed_expected)
+    if f_normalize_X is not None:
+        f_normalize_X(parsed_values)
+    if f_normalize_Y is not None:
+        f_normalize_Y(parsed_expected)
+
     parsed_values = map(lambda x: insert(x, 0, -1), parsed_values)
 
 
     return _split_input(parsed_values, parsed_expected, percent_train, percent_valid)
 
-def normalize_minmax(X, Y):
+def normalize_minmax(X):
     def normalize_list(V):
         # para cada parametro
         for param_num in range(0, len(V[0])):
@@ -69,9 +74,9 @@ def normalize_minmax(X, Y):
             param_max = max(param_data)
             for pttrn in V:
                 pttrn[param_num] = 2 * (pttrn[param_num] - param_min) / (param_max - param_min - 1)
-    return normalize_list(X), normalize_list(Y)
+    normalize_list(X)
 
-def normalize_standarize(X, Y):
+def normalize_standarize(X):
     def normalize_list(V):
         # para cada parametro
         for param_num in range(0, len(V[0])):
@@ -80,4 +85,4 @@ def normalize_standarize(X, Y):
             param_std = std(param_data)
             for pttrn in V:
                 pttrn[param_num] = (pttrn[param_num] - param_mean) / param_std
-    return normalize_list(X), normalize_list(Y)
+    normalize_list(X)

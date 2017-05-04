@@ -164,7 +164,7 @@ def are_consistent_layers_specs(pattern_size, hidden_layers_specs):
 		curr = nextl
 #----------------------------------------------------------------------------------------------------------------------
 # eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia
-training_specs = TrainingSpecs(0.1, 1000, 0.00001, True, 0)
+training_specs = TrainingSpecs(0.1, 50, 0.00001, True, 0)
 training_error_by_epoch = []
 validation_error = -1
 
@@ -176,9 +176,11 @@ if EJERCICIO == 0:
 		 [-1,0,0,1], [-1,0,1,1], [-1,1,0,1] , [-1, 1,1,1]]
 	Y_tr = Y_valid = [[0],[1],[1],[0],[1],[0],[0],[1]]
 elif EJERCICIO == 1:
-	X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej1(percent_train=80, percent_valid=10, f_normalize=None)
+	X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej1(percent_train=80, percent_valid=10,
+                                                             f_normalize_X=normalize_standarize, f_normalize_Y=None)
 else:
-    X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=80, percent_valid=10, f_normalize=None)
+    X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=80, percent_valid=10,
+                                                             f_normalize_X =None, f_normalize_Y = None)
 
 #Inicializamos perceptron,
 hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
