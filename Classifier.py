@@ -1,6 +1,6 @@
 from perceptronMulticapa import PerceptronMulticapa, Layer, TrainingSpecs, v_tanh, v_tanh_deriv
 import matplotlib.pyplot as plt
-from numpy import argmax, mean, std
+from numpy import argmax
 from Parser import parse_ej1
 import numpy as np
 
@@ -23,30 +23,6 @@ class Classifier(PerceptronMulticapa):
                 errors += 1
 
         return errors / float(len(X))
-
-def normalize_minmax(X, Y):
-    def normalize_list(V):
-        # para cada parametro
-        for param_num in range(0, len(V[0])):
-            param_data = [pttrn[param_num] for pttrn in V]
-            param_min = min(param_data)
-            param_max = max(param_data)
-            for pttrn in V:
-                pttrn[param_num] = 2 * (pttrn[param_num] - param_min) / (param_max - param_min - 1)
-    normalize_list(X)
-    normalize_list(Y)
-
-def normalize_standarize(X, Y):
-    def normalize_list(V):
-        # para cada parametro
-        for param_num in range(0, len(V[0])):
-            param_data = [pttrn[param_num] for pttrn in V]
-            param_mean = mean(param_data)
-            param_std = std(param_data)
-            for pttrn in V:
-                pttrn[param_num] = (pttrn[param_num] - param_mean) / param_std
-    normalize_list(X)
-    normalize_list(Y)
 
 X, Y = parse_ej1()
 #normalize_standarize(X, Y)

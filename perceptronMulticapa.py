@@ -3,7 +3,7 @@ from math import tanh
 from random import shuffle
 
 import matplotlib.pyplot as plt
-from Parser import parse_ej2
+from Parser import parse_ej2, normalize_standarize, normalize_minmax
 
 class TrainingSpecs(object):
 
@@ -167,32 +167,34 @@ def are_consistent_layers_specs(pattern_size, hidden_layers_specs):
 training_specs = TrainingSpecs(0.1, 1000, 0.00001, True, 0)
 training_error_by_epoch = []
 validation_error = -1
-X = []
-Y = []
 
 #para testear localmente paridad o con el ejercicio 2
 if False:
 	#Lo necesario para el XOR.
-	X = [[-1,0,0,0], [-1,0,1,0], [-1,1,0,0] , [-1, 1,1,0],
+	X_tr = x_valid = [[-1,0,0,0], [-1,0,1,0], [-1,1,0,0] , [-1, 1,1,0],
 		 [-1,0,0,1], [-1,0,1,1], [-1,1,0,1] , [-1, 1,1,1]]
-	Y = [[0],[1],[1],[0],[1],[0],[0],[1]]
+	Y_tr = Y_valid = [[0],[1],[1],[0],[1],[0],[0],[1]]
 else:
-	X, Y = parse_ej2()
-	vector_divisor_X = np.array([1, 1000, 1000, 1000, 10, 10, 1, 10])
-	vector_divisor_Y = np.array([100, 100])
-	X = X / vector_divisor_X
-	Y = Y / vector_divisor_Y
-	X = map(lambda x: np.insert(x, 0, -1), X)
+
+	def norm(X,Y):
+		vector_divisor_X = np.array([1, 1000, 1000, 1000, 10, 10, 1, 10])
+		vector_divisor_Y = np.array([100, 100])
+		X = X / vector_divisor_X
+		Y = Y / vector_divisor_Y
+		return X, Y
+
+	X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=70, percent_valid=10, f_normalize=norm)
+
 
 #Inicializamos perceptron,
-hidden_layers = [Layer(len(X[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
+hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
 # output_layer = Layer(11, 2, lambda x: x,  lambda x: 1, True)
 output_layer = Layer(11, 2, binary_sigmoidal, binary_sigmoidal_derivative, True)
-ppm = PerceptronMulticapa(len(X[0]), hidden_layers, output_layer)
+ppm = PerceptronMulticapa(len(X_tr[0]), hidden_layers, output_layer)
 
 #Entrenamos y validamos.
-training_error_by_epoch = ppm.train(X[:300], Y[:300], training_specs)
-validation_error = ppm.validate(X[300:400], Y[300:400])
+training_error_by_epoch = ppm.train(X_tr, Y_tr, training_specs)
+validation_error = ppm.validate(X_valid, Y_valid)
 
 # Plot de error de entrenamiento
 plt.plot(range(1, len(training_error_by_epoch)+1), training_error_by_epoch, marker='o')
