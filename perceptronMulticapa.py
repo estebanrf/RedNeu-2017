@@ -105,7 +105,7 @@ class PerceptronMulticapa(object):
 			current_delta = np.multiply(self.output_layer.activation_fx_derivative(np.dot(V_M_minus_1, self.output_layer.neurons_matrix)), error)
 			propagation = np.dot(current_delta, np.transpose(self.output_layer.neurons_matrix[1:]))
 
-			delta_W = (1 if self.momentum_inertia == 0 else -1) * self.eta * np.outer(V_M_minus_1, current_delta) + (self.momentum_inertia * self.output_layer.previous_momentum_neurons_matrix)
+			delta_W = (1 if self.momentum_inertia == 0 else -1) * self.eta * np.outer(V_M_minus_1, current_delta) - (self.momentum_inertia * self.output_layer.previous_momentum_neurons_matrix)
 			self.output_layer.neurons_matrix += delta_W
 			self.output_layer.previous_momentum_neurons_matrix = delta_W
 			V_index = -2
@@ -116,7 +116,7 @@ class PerceptronMulticapa(object):
 				V_i_minus_1 = V[V_index - 1]
 				current_delta = np.multiply(hidden_layer.activation_fx_derivative(np.dot(V_i_minus_1, hidden_layer.neurons_matrix)), propagation)
 				propagation = np.dot(current_delta, np.transpose(hidden_layer.neurons_matrix[1:]))
-				delta_W = (1 if self.momentum_inertia == 0 else -1) * self.eta * np.outer(V_i_minus_1, current_delta) + (self.momentum_inertia * hidden_layer.previous_momentum_neurons_matrix)
+				delta_W = (1 if self.momentum_inertia == 0 else -1) * self.eta * np.outer(V_i_minus_1, current_delta) - (self.momentum_inertia * hidden_layer.previous_momentum_neurons_matrix)
 				hidden_layer.neurons_matrix += delta_W
 				hidden_layer.previous_momentum_neurons_matrix = delta_W
 				V_index = V_index - 1
@@ -169,9 +169,9 @@ training_error_by_epoch = []
 validation_error = -1
 
 #para testear localmente paridad o con el ejercicio 2
-if False:
+if True:
 	#Lo necesario para el XOR.
-	X_tr = x_valid = [[-1,0,0,0], [-1,0,1,0], [-1,1,0,0] , [-1, 1,1,0],
+	X_tr = X_valid = [[-1,0,0,0], [-1,0,1,0], [-1,1,0,0] , [-1, 1,1,0],
 		 [-1,0,0,1], [-1,0,1,1], [-1,1,0,1] , [-1, 1,1,1]]
 	Y_tr = Y_valid = [[0],[1],[1],[0],[1],[0],[0],[1]]
 else:
@@ -183,7 +183,7 @@ else:
 		Y = Y / vector_divisor_Y
 		return X, Y
 
-	X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=70, percent_valid=10, f_normalize=norm)
+	X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=70, percent_valid=10, f_normalize=None)
 
 
 #Inicializamos perceptron,
@@ -204,4 +204,4 @@ plt.show()
 
 # Ya veremos como printear el error de validacion.
 print("VALIDATION ERROR:")
-print(validation_error * 100)
+print(validation_error)
