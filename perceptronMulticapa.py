@@ -105,7 +105,7 @@ class PerceptronMulticapa(object):
 			current_delta = np.multiply(self.output_layer.activation_fx_derivative(np.dot(V_M_minus_1, self.output_layer.neurons_matrix)), error)
 			propagation = np.dot(current_delta, np.transpose(self.output_layer.neurons_matrix[1:]))
 
-			delta_W = (1 if self.momentum_inertia == 0 else -1) * self.eta * np.outer(V_M_minus_1, current_delta) - (self.momentum_inertia * self.output_layer.previous_momentum_neurons_matrix)
+			delta_W =  self.eta * np.outer(V_M_minus_1, current_delta) - (self.momentum_inertia * self.output_layer.previous_momentum_neurons_matrix)
 			self.output_layer.neurons_matrix += delta_W
 			self.output_layer.previous_momentum_neurons_matrix = delta_W
 			V_index = -2
@@ -116,7 +116,7 @@ class PerceptronMulticapa(object):
 				V_i_minus_1 = V[V_index - 1]
 				current_delta = np.multiply(hidden_layer.activation_fx_derivative(np.dot(V_i_minus_1, hidden_layer.neurons_matrix)), propagation)
 				propagation = np.dot(current_delta, np.transpose(hidden_layer.neurons_matrix[1:]))
-				delta_W = (1 if self.momentum_inertia == 0 else -1) * self.eta * np.outer(V_i_minus_1, current_delta) - (self.momentum_inertia * hidden_layer.previous_momentum_neurons_matrix)
+				delta_W = self.eta * np.outer(V_i_minus_1, current_delta) - (self.momentum_inertia * hidden_layer.previous_momentum_neurons_matrix)
 				hidden_layer.neurons_matrix += delta_W
 				hidden_layer.previous_momentum_neurons_matrix = delta_W
 				V_index = V_index - 1
@@ -164,7 +164,7 @@ def are_consistent_layers_specs(pattern_size, hidden_layers_specs):
 		curr = nextl
 #----------------------------------------------------------------------------------------------------------------------
 # eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia
-training_specs = TrainingSpecs(0.1, 1000, 0.00001, True, 0)
+training_specs = TrainingSpecs(0.1, 1000, 0.00001, True, 0.7)
 training_error_by_epoch = []
 validation_error = -1
 
