@@ -185,7 +185,6 @@ else:
 
 #Inicializamos perceptron,
 hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
-# output_layer = Layer(11, 2, lambda x: x,  lambda x: 1, True)
 output_layer = Layer(11, 2, binary_sigmoidal, binary_sigmoidal_derivative, True)
 ppm = PerceptronMulticapa(hidden_layers, output_layer)
 
@@ -196,8 +195,10 @@ error_by_epoch = ppm.train(X_tr, Y_tr, X_valid, Y_valid, training_specs)
 plt.plot(range(1, len(error_by_epoch[0])+1), error_by_epoch[0], marker='o', label="Training error")
 plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Validation error")
 plt.legend(loc='upper left')
+plt.annotate(error_by_epoch[0][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[0][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
+plt.annotate(error_by_epoch[1][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[1][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
 
 plt.xlabel('Epoch')
 plt.ylabel('Epoch Error')
-plt.show()
 
+plt.show()
