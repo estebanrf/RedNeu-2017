@@ -7,80 +7,102 @@ from Parser import parse_ej1, parse_ej2, normalize_standarize, normalize_minmax
 
 class TrainingSpecs(object):
 
-	def __init__(self, eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia):
+	def __init__(self, eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch):
 
 		self.eta = eta
 		self.epochs = epochs
 		self.epsilon = epsilon
 		self.must_train_in_training_set_order = must_train_in_training_set_order
+		
 		if momentum_inertia < 0 or momentum_inertia > 1:
 			raise ValueError("Momentum inertia must be in [0,1]")
- 		self.momentum_inertia = momentum_inertia
+		self.momentum_inertia = momentum_inertia
+ 		
+ 		self.subsets_quantity_for_minibatch = subsets_quantity_for_minibatch
 
 class Layer(object):
 
 	def __init__(self, layer_input_size, neurons_count, activation_fx,
 				 activation_fx_derivative, use_uniform_distr_to_init_W):
 
-		self.layer_input_size = layer_input_size
-		self.neurons_count = neurons_count
 		self.activation_fx = activation_fx
 		self.activation_fx_derivative = activation_fx_derivative
+
 		if use_uniform_distr_to_init_W:
 			self.neurons_matrix = np.random.uniform(0.0, 1.0, (layer_input_size, neurons_count))
 		else:
 			self.neurons_matrix = np.random.rand((layer_input_size, neurons_count))
-		self.previous_momentum_neurons_matrix = np.zeros((layer_input_size, neurons_count))
+
+		self.previous_momentum_delta_W = np.zeros((layer_input_size, neurons_count))
 
 class PerceptronMulticapa(object):
 
-		def __init__(self, pattern_size, hidden_layers, output_layer):
+		def __init__(self, hidden_layers, output_layer):
 
-			# no creo que sea necesario lo del pattern_size, me parece que
-			# estaria mejor hacer un pre chequeo de nuestro set de entrenamiento
-			# y si vemos que no coincide con la primer capa oculta ahi si que chotee.
-
-			# are_consistent_layers_specs(pattern_size, hidden_layers_specs)
-
-			self.pattern_size = pattern_size
 			self.hidden_layers = hidden_layers
 			self.output_layer = output_layer
 
-		def train(self, X, Y, training_specs):
+		def train(self, X_training, Y_training, X_validation, Y_validation, training_specs):
 
 			self.eta = training_specs.eta
 			self.epochs = training_specs.epochs
 			self.momentum_inertia = training_specs.momentum_inertia
-			training_set = zip(X, Y)
 
+			training_set = zip(X_training, Y_training)
+			validation_set = zip(X_validation, Y_validation)
+
+			training_set = self.prepare_batch_or_mini_batch_training_set(training_set, training_specs.subsets_quantity_for_minibatch)
+			
 			training_error_by_epoch = []
+			validation_error_by_epoch = []
+
+			training_subset_index = 0
+
 			for _ in range(self.epochs):
-				epoch_error = 0
-
+				
+				current_training_set = training_set[training_subset_index]
+				
 				if not training_specs.must_train_in_training_set_order:
-					shuffle(training_set)
-
-				for x, expected in training_set:
+					shuffle(current_training_set)
+				
+				for x, expected in current_training_set:
 					V = self.calculate_V(x)
 					self.back_propagation(V, expected)
-					# epoch_error += (np.linalg.norm(np.subtract(V[-1], expected)) / 2)
 
-				epoch_error = self.validate(X,Y)
+				epoch_training_error = self.calculate_error_using(current_training_set)
+				epoch_validation_error = self.calculate_error_using(validation_set)
 
-				training_error_by_epoch.append(epoch_error)
-				#Error de una epoca = promedio del error (no se si esta bien)
-				if (epoch_error / float(len(training_set))) <= training_specs.epsilon:
+				training_error_by_epoch.append(epoch_training_error)
+				validation_error_by_epoch.append(epoch_validation_error)
+
+				#Si el error de validacion de la epoca es menor que un EPSILON terminamos.
+				if epoch_validation_error <= training_specs.epsilon:
 					break
 
-			return training_error_by_epoch
+				training_subset_index = (training_subset_index + 1) % len(training_set)
 
-		def validate(self, X, Y):
+			return (training_error_by_epoch,validation_error_by_epoch)
+
+		def prepare_batch_or_mini_batch_training_set(self, training_set, subsets_quantity_for_minibatch):
+
+			if subsets_quantity_for_minibatch == 0 or subsets_quantity_for_minibatch == 1:
+				#Se corre todo el set de entrenamiento por epoca, o sea habra un unico subset.
+				training_set = [training_set]
+			else:
+				if len(training_set) < subsets_quantity_for_minibatch:
+					raise ValueError("There are not enough training patterns to create the specified subsets.")
+				#Dividimos el set de entrenamiento en la cantidad de subsets especificadas para minibatch.
+				elements_per_subset = len(training_set) / subsets_quantity_for_minibatch
+				training_set = [training_set[i : i + elements_per_subset] for i in range(0, len(training_set), elements_per_subset)]
+			return training_set
+
+		def calculate_error_using(self, zip_Xs_Ys):
 			error = 0
-			for x, expected in zip(X,Y):
+			for x, expected in zip_Xs_Ys:
 				V = self.calculate_V(x)
 				error += (np.linalg.norm(np.subtract(V[-1], expected)) / 2)
 
-			return error / float(len(X))
+			return error / float(len(zip_Xs_Ys))
 
 		def calculate_V(self, x):
 
@@ -105,9 +127,9 @@ class PerceptronMulticapa(object):
 			current_delta = np.multiply(self.output_layer.activation_fx_derivative(np.dot(V_M_minus_1, self.output_layer.neurons_matrix)), error)
 			propagation = np.dot(current_delta, np.transpose(self.output_layer.neurons_matrix[1:]))
 
-			delta_W =  self.eta * np.outer(V_M_minus_1, current_delta) - (self.momentum_inertia * self.output_layer.previous_momentum_neurons_matrix)
+			delta_W =  self.eta * np.outer(V_M_minus_1, current_delta) - (self.momentum_inertia * self.output_layer.previous_momentum_delta_W)
 			self.output_layer.neurons_matrix += delta_W
-			self.output_layer.previous_momentum_neurons_matrix = delta_W
+			self.output_layer.previous_momentum_delta_W = delta_W
 			V_index = -2
 
 			for hidden_layer in reversed(self.hidden_layers):
@@ -116,9 +138,9 @@ class PerceptronMulticapa(object):
 				V_i_minus_1 = V[V_index - 1]
 				current_delta = np.multiply(hidden_layer.activation_fx_derivative(np.dot(V_i_minus_1, hidden_layer.neurons_matrix)), propagation)
 				propagation = np.dot(current_delta, np.transpose(hidden_layer.neurons_matrix[1:]))
-				delta_W = self.eta * np.outer(V_i_minus_1, current_delta) - (self.momentum_inertia * hidden_layer.previous_momentum_neurons_matrix)
+				delta_W = self.eta * np.outer(V_i_minus_1, current_delta) - (self.momentum_inertia * hidden_layer.previous_momentum_delta_W)
 				hidden_layer.neurons_matrix += delta_W
-				hidden_layer.previous_momentum_neurons_matrix = delta_W
+				hidden_layer.previous_momentum_delta_W = delta_W
 				V_index = V_index - 1
 
 #Funciones de activacion y sus derivadas, agregar mas. ----------------------------------------------------------------
@@ -144,29 +166,8 @@ def binary_sigmoidal_derivative(x):
 	x = np.array(x)
 	return 2 * binary_sigmoidal(x) * (1 - binary_sigmoidal(x))
 #----------------------------------------------------------------------------------------------------------------------
-
-def are_consistent_layers_specs(pattern_size, hidden_layers_specs):
-
-	if len(hidden_layers_specs) == 0:
-		raise ValueError("There must be at least one Hidden Layer.")
-
-	if pattern_size != hidden_layers_specs[0].perceptrons_input_size:
-		raise ValueError("Pattern Size must be equals to First Hidden Layer Perceptron's Input Size.")
-
-	curr = 0
-
-	while curr != len(hidden_layers_specs) - 1:
-		nextl = curr + 1
-
-		if hidden_layers_specs[curr].perceptrons_count + 1 != hidden_layers_specs[nextl].perceptrons_input_size:
-			raise ValueError("Layers specifications are inconsistent.")
-
-		curr = nextl
-#----------------------------------------------------------------------------------------------------------------------
-# eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia
-training_specs = TrainingSpecs(0.1, 50, 0.00001, True, 0)
-training_error_by_epoch = []
-validation_error = -1
+# eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch
+training_specs = TrainingSpecs(0.1, 500, 0.00001, True, 0, 1)
 
 #para testear localmente paridad o con el ejercicio 2
 EJERCICIO = 1
@@ -186,18 +187,17 @@ else:
 hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
 # output_layer = Layer(11, 2, lambda x: x,  lambda x: 1, True)
 output_layer = Layer(11, 2, binary_sigmoidal, binary_sigmoidal_derivative, True)
-ppm = PerceptronMulticapa(len(X_tr[0]), hidden_layers, output_layer)
+ppm = PerceptronMulticapa(hidden_layers, output_layer)
 
 #Entrenamos y validamos.
-training_error_by_epoch = ppm.train(X_tr, Y_tr, training_specs)
-validation_error = ppm.validate(X_valid, Y_valid)
+error_by_epoch = ppm.train(X_tr, Y_tr, X_valid, Y_valid, training_specs)
 
 # Plot de error de entrenamiento
-plt.plot(range(1, len(training_error_by_epoch)+1), training_error_by_epoch, marker='o')
+plt.plot(range(1, len(error_by_epoch[0])+1), error_by_epoch[0], marker='o', label="Training error")
+plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Validation error")
+plt.legend(loc='upper left')
+
 plt.xlabel('Epoch')
 plt.ylabel('Epoch Error')
 plt.show()
 
-# Ya veremos como printear el error de validacion.
-print("VALIDATION ERROR:")
-print(validation_error)
