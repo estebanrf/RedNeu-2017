@@ -69,7 +69,7 @@ class PerceptronMulticapa(object):
 			training_subset_index = 0
 
 			error_reference_from_past = -1
-			error_difference_counting = 0
+			self.error_difference_counting = 0
 
 			for _ in range(self.epochs):
 				
@@ -89,10 +89,10 @@ class PerceptronMulticapa(object):
 				validation_error_by_epoch.append(epoch_validation_error)
 
 				if self.adaptative_params.count_of_errors_straight > 0:
-					new_error_reference = self.adapt_eta(error_reference_from_past, error_difference_counting, epoch_training_error)
+					new_error_reference = self.adapt_eta(error_reference_from_past, epoch_training_error)
 					if new_error_reference > 0:
 						error_reference_from_past = new_error_reference
-						error_difference_counting = 0
+						self.error_difference_counting = 0
 
 
 				#Si el error de validacion de la epoca es menor que un EPSILON terminamos.
@@ -103,7 +103,7 @@ class PerceptronMulticapa(object):
 
 			return (training_error_by_epoch,validation_error_by_epoch)
 		
-		def adapt_eta(self, error_reference_from_past, error_difference_counting, epoch_training_error):
+		def adapt_eta(self, error_reference_from_past, epoch_training_error):
 
 			if error_reference_from_past == -1:
 					#Es el primer entrenamiento.
@@ -111,26 +111,26 @@ class PerceptronMulticapa(object):
 			else:
 				if error_reference_from_past < epoch_training_error:
 					#Hubo mas error
-					if error_difference_counting < 0:
+					if self.error_difference_counting < 0:
 						#Venia una seguidilla de menos error, y ahora reseteamos.
 						return epoch_training_error
 					
-					error_difference_counting = error_difference_counting + 1
+					self.error_difference_counting = self.error_difference_counting + 1
 
-					if self.adaptative_params.count_of_errors_straight == error_difference_counting:
+					if self.adaptative_params.count_of_errors_straight == self.error_difference_counting:
 						self.eta += -1 * self.eta * self.adaptative_params.beta
 						return epoch_training_error
 					else:
 						return 0
 				else:
-					error_difference_counting = error_difference_counting - 1
+					self.error_difference_counting = self.error_difference_counting - 1
 					#Hubo menos error	
-					if error_difference_counting > 0:
+					if self.error_difference_counting > 0:
 						return epoch_training_error
 				
-					error_difference_counting = error_difference_counting - 1
+					self.error_difference_counting = self.error_difference_counting - 1
 					
-					if self.adaptative_params.count_of_errors_straight == abs(error_difference_counting):
+					if self.adaptative_params.count_of_errors_straight == abs(self.error_difference_counting):
 						self.eta += self.adaptative_params.a
 						return epoch_training_error
 					else:
