@@ -7,7 +7,7 @@ from Parser import parse_ej1, parse_ej2, normalize_standarize, normalize_minmax
 
 class TrainingSpecs(object):
 
-	def __init__(self, eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch):
+	def __init__(self, eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch, adaptative_params):
 
 		self.eta = eta
 		self.epochs = epochs
@@ -19,6 +19,15 @@ class TrainingSpecs(object):
 		self.momentum_inertia = momentum_inertia
  		
  		self.subsets_quantity_for_minibatch = subsets_quantity_for_minibatch
+ 		self.adaptative_params = adaptative_params
+
+class AdaptativeParameters(object):
+
+	def __init__(self, count_of_errors_straight, a, beta):
+
+		self.count_of_errors_straight = count_of_errors_straight
+		self.a = a
+		self.beta = beta	
 
 class Layer(object):
 
@@ -47,6 +56,7 @@ class PerceptronMulticapa(object):
 			self.eta = training_specs.eta
 			self.epochs = training_specs.epochs
 			self.momentum_inertia = training_specs.momentum_inertia
+			self.adaptative_params = training_specs.adaptative_params
 
 			training_set = zip(X_training, Y_training)
 			validation_set = zip(X_validation, Y_validation)
@@ -57,6 +67,9 @@ class PerceptronMulticapa(object):
 			validation_error_by_epoch = []
 
 			training_subset_index = 0
+
+			error_reference_from_past = -1
+			error_difference_counting = 0
 
 			for _ in range(self.epochs):
 				
@@ -75,6 +88,13 @@ class PerceptronMulticapa(object):
 				training_error_by_epoch.append(epoch_training_error)
 				validation_error_by_epoch.append(epoch_validation_error)
 
+				if self.adaptative_params.count_of_errors_straight > 0:
+					new_error_reference = self.adapt_eta(error_reference_from_past, error_difference_counting, epoch_training_error)
+					if new_error_reference > 0:
+						error_reference_from_past = new_error_reference
+						error_difference_counting = 0
+
+
 				#Si el error de validacion de la epoca es menor que un EPSILON terminamos.
 				if epoch_validation_error <= training_specs.epsilon:
 					break
@@ -82,6 +102,40 @@ class PerceptronMulticapa(object):
 				training_subset_index = (training_subset_index + 1) % len(training_set)
 
 			return (training_error_by_epoch,validation_error_by_epoch)
+		
+		def adapt_eta(self, error_reference_from_past, error_difference_counting, epoch_training_error):
+
+			if error_reference_from_past == -1:
+					#Es el primer entrenamiento.
+					return epoch_training_error
+			else:
+				if error_reference_from_past < epoch_training_error:
+					#Hubo mas error
+					if error_difference_counting < 0:
+						#Venia una seguidilla de menos error, y ahora reseteamos.
+						return epoch_training_error
+					
+					error_difference_counting = error_difference_counting + 1
+
+					if self.adaptative_params.count_of_errors_straight == error_difference_counting:
+						self.eta += -1 * self.eta * self.adaptative_params.beta
+						return epoch_training_error
+					else:
+						return 0
+				else:
+					error_difference_counting = error_difference_counting - 1
+					#Hubo menos error	
+					if error_difference_counting > 0:
+						return epoch_training_error
+				
+					error_difference_counting = error_difference_counting - 1
+					
+					if self.adaptative_params.count_of_errors_straight == abs(error_difference_counting):
+						self.eta += self.adaptative_params.a
+						return epoch_training_error
+					else:
+						return 0
+
 
 		def prepare_batch_or_mini_batch_training_set(self, training_set, subsets_quantity_for_minibatch):
 
@@ -166,8 +220,9 @@ def binary_sigmoidal_derivative(x):
 	x = np.array(x)
 	return 2 * binary_sigmoidal(x) * (1 - binary_sigmoidal(x))
 #----------------------------------------------------------------------------------------------------------------------
-# eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch
-training_specs = TrainingSpecs(0.1, 500, 0.00001, True, 0, 1)
+# eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch, adaptative_params (ES UNA TRIPLA)
+#### Para deshabilitar parametros adaptativos poner como primer parametro del constructor un -1.
+training_specs = TrainingSpecs(0.1, 100, 0.00001, True, 0, 1, AdaptativeParameters(3, 0.001, 0.1))
 
 #para testear localmente paridad o con el ejercicio 2
 EJERCICIO = 1
