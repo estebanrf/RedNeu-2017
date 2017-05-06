@@ -1,9 +1,105 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import argparse
 import numpy as np
 from math import tanh
 from random import shuffle
+from ast import literal_eval
+import os, json
 
 import matplotlib.pyplot as plt
 from Parser import parse_ej1, parse_ej2, normalize_standarize, normalize_minmax
+
+def parse_layers(args, IN_SIZE, OUT_SIZE):
+
+	args.l_hidden = literal_eval(args.l_hidden) #pasa a lista posta
+	args.l_hidden = [Layer(1+args.l_hidden[ind-1].neurons_count if ind > 0 else IN_SIZE, a_layer[0],
+					binary_sigmoidal if a_layer[1] == 1 else v_tanh,
+					binary_sigmoidal_derivative if a_layer[1] == 1 else v_tanh_deriv,
+					True)
+					for ind, a_layer in enumerate(args.l_hidden)]
+
+
+	args.l_output = literal_eval(args.l_output)
+	args.l_output = Layer(1+args.l_hidden[-1].neurons_count, OUT_SIZE,
+					binary_sigmoidal if args.l_output == 1 else v_tanh,
+					binary_sigmoidal_derivative if args.l_output == 1 else v_tanh_deriv,
+					True)
+
+def parse_arguments():
+	arguments = argparse.ArgumentParser()
+	arguments.add_argument('--eta', type=float, help="eta inicial") #defaultea a None si no se le define
+	arguments.add_argument('--epochs', type=int, help="cantidad de epocas")
+	arguments.add_argument('--shuffle', type=int, help="randomizar orden de patrones (0 o 1)")
+	arguments.add_argument('--momentum', type=float, help="momentum inertia")
+	arguments.add_argument('--batch_size', type=int, help="tamaño del batch (para batch, -1)")
+	arguments.add_argument('--adapt', type=int, help="usar parametros adaptativos (0 o 1)")
+	arguments.add_argument('--ej', type=int, help="numero de ejercicio")
+	arguments.add_argument('--norm_x', type=int, help="normalizar input (0 o 1)")
+	arguments.add_argument('--norm_y', type=int, help="normalizar output (0 o 1)")
+	arguments.add_argument('--l_hidden',
+						help="""
+						hidden layer. ejemplo: [layer1,layer,...] con layerX = (cantNeuronas,activacion),
+						con activation=1 para sigmoidea estandar, =2 para tanh
+						""")
+	arguments.add_argument('--l_output', help="1 o 2 para activacion sigmoidea o tanh")
+	arguments.add_argument('--list', type=int, help="Para mostrar las redes entrenadas (0 o 1)")
+	arguments.add_argument('--test', help="Red entrenada para testear (mandar --ej tambien)")
+	arguments.add_argument('--export', help="Nombre, si se desea exportar la red")
+	args = arguments.parse_args()
+
+	process = lambda b, r1, r2: r1 if b == 1 else r2
+	if args.shuffle is not None: args.shuffle = process(args.shuffle, True, False)
+	if args.adapt is not None: args.adapt = process(args.adapt, True, False)
+	if args.list is not None: args.list = process(args.list, True, False)
+	if args.norm_x is not None: args.norm_x = process(args.norm_x, normalize_standarize, None)
+	if args.norm_y is not None: args.norm_y = process(args.norm_x, normalize_standarize, None)
+
+	return args
+
+
+def network_import(directory):
+
+	filenames = sorted([fn for fn in os.listdir(directory) if '.npy' not in fn])
+	layers = []
+	for filename in filenames:
+
+		prop = json.load(open(directory+'/'+filename, 'r'))
+
+		fx_name = prop["activation_fx"]
+		fx = globals()[fx_name]
+
+		matrix_filename = prop["neurons_matrix_file"]
+		matrix = np.load(matrix_filename+'.npy')
+
+		layers.append(ExistingLayer(fx, matrix))
+
+	return PerceptronMulticapa(layers[:-1], layers[-1])
+
+def network_export(net, network_name):
+
+	network_directory = 'net-' + network_name + '/'
+
+	if not os.path.exists(network_directory):
+	    os.makedirs(network_directory)
+
+	for ind, l in enumerate(net.hidden_layers + [net.output_layer]):
+
+		matrix_filename = network_directory + str(ind)
+
+		np.save(matrix_filename, l.neurons_matrix)
+		prop = {"activation_fx": l.activation_fx.__name__,
+				"neurons_matrix_file": matrix_filename}
+		outstring = json.dumps(prop)
+
+		with open(network_directory+str(ind)+'.json', 'w') as f:
+			f.write(outstring)
+
+
+def list_trained_networks():
+	print "Redes existentes:"
+	print filter(lambda x: 'net-' in x, next(os.walk('.'))[1])
+
 
 class TrainingSpecs(object):
 
@@ -27,7 +123,7 @@ class AdaptativeParameters(object):
 
 		self.count_of_errors_straight = count_of_errors_straight
 		self.a = a
-		self.beta = beta	
+		self.beta = beta
 
 class Layer(object):
 
@@ -36,6 +132,7 @@ class Layer(object):
 
 		self.activation_fx = activation_fx
 		self.activation_fx_derivative = activation_fx_derivative
+		self.neurons_count = neurons_count
 
 		if use_uniform_distr_to_init_W:
 			self.neurons_matrix = np.random.uniform(0.0, 1.0, (layer_input_size, neurons_count))
@@ -43,6 +140,11 @@ class Layer(object):
 			self.neurons_matrix = np.random.rand((layer_input_size, neurons_count))
 
 		self.previous_momentum_delta_W = np.zeros((layer_input_size, neurons_count))
+
+class ExistingLayer(Layer):
+	def __init__(self, activation_fx, neurons_matrix):
+		self.activation_fx = activation_fx
+		self.neurons_matrix = neurons_matrix
 
 class PerceptronMulticapa(object):
 
@@ -146,6 +248,8 @@ class PerceptronMulticapa(object):
 				if len(training_set) < subsets_quantity_for_minibatch:
 					raise ValueError("There are not enough training patterns to create the specified subsets.")
 				#Dividimos el set de entrenamiento en la cantidad de subsets especificadas para minibatch.
+				if subsets_quantity_for_minibatch < 0:
+					subsets_quantity_for_minibatch = len(training_set)
 				elements_per_subset = len(training_set) / subsets_quantity_for_minibatch
 				training_set = [training_set[i : i + elements_per_subset] for i in range(0, len(training_set), elements_per_subset)]
 			return training_set
@@ -219,13 +323,36 @@ def binary_sigmoidal(x):
 def binary_sigmoidal_derivative(x):
 	x = np.array(x)
 	return 2 * binary_sigmoidal(x) * (1 - binary_sigmoidal(x))
+
 #----------------------------------------------------------------------------------------------------------------------
+print("Correr con -h para ver opciones")
+args = parse_arguments()
+#parametros configurables por consola   #tocar esta columna
+EJERCICIO = args.ej or 					1
+ETA = args.eta or 						0.1
+EPOCHS = args.epochs or 				100
+TRAIN_IN_ORDER = 						True 					if args.shuffle is None else args.shuffle
+MOMENTUM = args.momentum or				0
+MINIABATCH_SIZE = args.batch_size or 	1 #1 para estocastico, -1 para batch, x para mini batchs
+ADPT_STRAIGHT_ERROR_COUNT = 			3 						if args.adapt is None else 0
+NORM_X = 								normalize_standarize 	if args.norm_x is None else args.norm_x
+NORM_Y = 								None 					if args.norm_y is None else args.norm_y
+LIST_EXISTING =							False					if args.list is None else args.list
+TEST_EXISTING = args.test or			None
+EXPORT = args.export or			        None
+#parametros no configurables por consola
+ADPT_A = 								0.001
+ADPT_BETA = 							0.1
+EPSILON = 								0.00001
+
+
 # eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch, adaptative_params (ES UNA TRIPLA)
 #### Para deshabilitar parametros adaptativos poner como primer parametro del constructor un -1.
-training_specs = TrainingSpecs(0.1, 100, 0.00001, True, 0, 1, AdaptativeParameters(3, 0.001, 0.1))
+training_specs = TrainingSpecs(ETA, EPOCHS, EPSILON, TRAIN_IN_ORDER, MOMENTUM, MINIABATCH_SIZE,
+							AdaptativeParameters(ADPT_STRAIGHT_ERROR_COUNT, ADPT_A, ADPT_BETA))
 
 #para testear localmente paridad o con el ejercicio 2
-EJERCICIO = 1
+
 if EJERCICIO == 0:
 	#Lo necesario para el XOR.
 	X_tr = X_valid = [[-1,0,0,0], [-1,0,1,0], [-1,1,0,0] , [-1, 1,1,0],
@@ -233,27 +360,48 @@ if EJERCICIO == 0:
 	Y_tr = Y_valid = [[0],[1],[1],[0],[1],[0],[0],[1]]
 elif EJERCICIO == 1:
 	X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej1(percent_train=80, percent_valid=10,
-                                                             f_normalize_X=normalize_standarize, f_normalize_Y=None)
+                                                             f_normalize_X=NORM_X, f_normalize_Y=NORM_Y)
 else:
     X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=80, percent_valid=10,
-                                                             f_normalize_X =None, f_normalize_Y = None)
+                                                             f_normalize_X =NORM_X, f_normalize_Y = NORM_Y)
 
 #Inicializamos perceptron,
-hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
-output_layer = Layer(11, 2, binary_sigmoidal, binary_sigmoidal_derivative, True)
-ppm = PerceptronMulticapa(hidden_layers, output_layer)
+if not args.l_hidden or not args.l_output:
+	hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
+	output_layer = Layer(1+hidden_layers[-1].neurons_count, 2, binary_sigmoidal, binary_sigmoidal_derivative, True)
+else:
+	parse_layers(args, len(X_tr[0]), len(Y_tr[0]))
+	hidden_layers = args.l_hidden
+	output_layer = args.l_output
 
-#Entrenamos y validamos.
-error_by_epoch = ppm.train(X_tr, Y_tr, X_valid, Y_valid, training_specs)
+if LIST_EXISTING:
+	list_trained_networks()
+elif TEST_EXISTING:
+	ppm = network_import(TEST_EXISTING)
+	err_tr  = ppm.calculate_error_using(zip(X_tr, Y_tr))
+	err_val = ppm.calculate_error_using(zip(X_valid, Y_valid))
+	err_tst = ppm.calculate_error_using(zip(X_test, Y_test))
+	print "Training Error: %s" % err_tr
+	print "Validation Error: %s" % err_val
+	print "Testing Error: %s" % err_tst
 
-# Plot de error de entrenamiento
-plt.plot(range(1, len(error_by_epoch[0])+1), error_by_epoch[0], marker='o', label="Training error")
-plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Validation error")
-plt.legend(loc='upper left')
-plt.annotate(error_by_epoch[0][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[0][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
-plt.annotate(error_by_epoch[1][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[1][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
+else:
+	ppm = PerceptronMulticapa(hidden_layers, output_layer)
 
-plt.xlabel('Epoch')
-plt.ylabel('Epoch Error')
+	#Entrenamos y validamos.
+	error_by_epoch = ppm.train(X_tr, Y_tr, X_valid, Y_valid, training_specs)
+	if EXPORT is not None:
+		network_export(ppm, EXPORT)
 
-plt.show()
+
+	# Plot de error de entrenamiento
+	plt.plot(range(1, len(error_by_epoch[0])+1), error_by_epoch[0], marker='o', label="Training error")
+	plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Validation error")
+	plt.legend(loc='upper left')
+	plt.annotate(error_by_epoch[0][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[0][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
+	plt.annotate(error_by_epoch[1][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[1][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
+
+	plt.xlabel('Epoch')
+	plt.ylabel('Epoch Error')
+
+	plt.show()
