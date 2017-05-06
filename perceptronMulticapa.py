@@ -167,6 +167,9 @@ class PerceptronMulticapa(object):
 			validation_error_by_epoch = []
 
 			error_reference_from_past = -1
+			previous_validation_error = -1
+			consecutive_increases = 0
+			check_in = 1
 			self.error_difference_counting = 0
 			for _ in range(self.epochs):
 				if not training_specs.must_train_in_training_set_order:
@@ -204,6 +207,18 @@ class PerceptronMulticapa(object):
 				#Si el error de validacion de la epoca es menor que un EPSILON terminamos.
 				if epoch_validation_error <= training_specs.epsilon:
 					break
+				#early stopping, si el error de validacion aumenta 3 veces seguidas,
+				# tomando muestras cada 5 epocas, terminamos.
+				if check_in == 0:
+					if epoch_validation_error > previous_validation_error:
+						consecutive_increases += 1
+						if consecutive_increases == 3:
+							break
+					previous_validation_error = epoch_validation_error
+					consecutive_increases = 0
+					check_in = 5
+				else:
+					check_in -= 1
 
 			return (training_error_by_epoch,validation_error_by_epoch)
 
@@ -316,7 +331,6 @@ class PerceptronMulticapa(object):
 			# actualizamos nuestra matriz de neuronas
 			self.output_layer.neurons_matrix += delta_W
 			self.output_layer.previous_momentum_delta_W = delta_W
-			self.output_layer.neurons_matrix
 			V_index = -2
 
 			# continuamos con el back_propagation por el resto de las capas ocultas
@@ -363,7 +377,7 @@ ETA = args.eta or 						0.1
 EPOCHS = args.epochs or 				100
 TRAIN_IN_ORDER = 						True 					if args.shuffle is None else args.shuffle
 MOMENTUM = args.momentum or				0
-MINIABATCH_SIZE = args.batch_size or 	400 #cantidad de patrones de entrada para estocastico, 1 para batch, x para mini batchs
+MINIABATCH_SIZE = args.batch_size or 	-1 #-1 para estocastico, 1 para batch, n para mini batch
 ADPT_STRAIGHT_ERROR_COUNT = 			3 						if args.adapt is None else 0
 NORM_X = 								normalize_standarize 	if args.norm_x is None else args.norm_x
 NORM_Y = 								None 					if args.norm_y is None else args.norm_y
@@ -382,8 +396,6 @@ EPSILON = 								0.00001
 # si queremos correr estocastico pasamos la cantidad de nuestro set
 #### Para deshabilitar parametros adaptativos poner como primer parametro del constructor un -1.
 
-#para testear localmente paridad o con el ejercicio 2
-EJERCICIO = 2
 training_specs = TrainingSpecs(ETA, EPOCHS, EPSILON, TRAIN_IN_ORDER, MOMENTUM, MINIABATCH_SIZE,
 							AdaptativeParameters(ADPT_STRAIGHT_ERROR_COUNT, ADPT_A, ADPT_BETA))
 
@@ -398,10 +410,11 @@ elif EJERCICIO == 1:
                                                              f_normalize_X=NORM_X, f_normalize_Y=NORM_Y)
 else:
     X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=80, percent_valid=10,
-                                                             f_normalize_X = normalize_minmax,
-															 f_normalize_Y = normalize_minmax)
+                                                             f_normalize_X=NORM_X, f_normalize_Y=NORM_Y)
 
-training_specs = TrainingSpecs(eta, 500, 0.00001, True, 0, 400, AdaptativeParameters(-1, 0.001, 0.1))
+training_specs = TrainingSpecs(ETA, EPOCHS, EPSILON, TRAIN_IN_ORDER,
+                               MOMENTUM, MINIABATCH_SIZE,
+                               AdaptativeParameters(ADPT_STRAIGHT_ERROR_COUNT, ADPT_A, ADPT_BETA))
 #Inicializamos perceptron,
 if not args.l_hidden or not args.l_output:
 	hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
@@ -430,15 +443,14 @@ else:
 	if EXPORT is not None:
 		network_export(ppm, EXPORT)
 
+	# Plot de error de entrenamiento
+	plt.plot(range(1, len(error_by_epoch[0])+1), error_by_epoch[0], marker='o', label="Training error")
+	plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Training validation")
 
-# Plot de error de entrenamiento
-plt.plot(range(1, len(error_by_epoch[0])+1), error_by_epoch[0], marker='o', label="Training error")
-plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Training validation")
+	plt.legend(loc='upper left')
+	plt.annotate(error_by_epoch[0][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[0][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
+	plt.annotate(error_by_epoch[1][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[1][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
 
-plt.legend(loc='upper left')
-plt.annotate(error_by_epoch[0][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[0][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
-plt.annotate(error_by_epoch[1][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[1][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
-
-plt.xlabel('Epoch')
-plt.ylabel('Epoch Error')
-plt.show()
+	plt.xlabel('Epoch')
+	plt.ylabel('Epoch Error')
+	plt.show()
