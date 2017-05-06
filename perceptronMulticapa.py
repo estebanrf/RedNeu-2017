@@ -5,6 +5,7 @@ from random import shuffle
 import matplotlib.pyplot as plt
 from Parser import parse_ej1, parse_ej2, normalize_standarize, normalize_minmax
 
+# cargamos los datos con los cuales se va a entrenar nuestro perceptron
 class TrainingSpecs(object):
 
 	def __init__(self, eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch, adaptative_params):
@@ -13,11 +14,11 @@ class TrainingSpecs(object):
 		self.epochs = epochs
 		self.epsilon = epsilon
 		self.must_train_in_training_set_order = must_train_in_training_set_order
-		
+
 		if momentum_inertia < 0 or momentum_inertia > 1:
 			raise ValueError("Momentum inertia must be in [0,1]")
 		self.momentum_inertia = momentum_inertia
- 		
+
  		self.subsets_quantity_for_minibatch = subsets_quantity_for_minibatch
  		self.adaptative_params = adaptative_params
 
@@ -27,8 +28,9 @@ class AdaptativeParameters(object):
 
 		self.count_of_errors_straight = count_of_errors_straight
 		self.a = a
-		self.beta = beta	
+		self.beta = beta
 
+# crea una capa con toda su arquitectura
 class Layer(object):
 
 	def __init__(self, layer_input_size, neurons_count, activation_fx,
@@ -51,8 +53,8 @@ class PerceptronMulticapa(object):
 			self.hidden_layers = hidden_layers
 			self.output_layer = output_layer
 
+		# patrones de entrenamiento, resultados esperados, patrones para la validacion, resultados esperados, datos del entrenamiento
 		def train(self, X_training, Y_training, X_validation, Y_validation, training_specs):
-
 			self.eta = training_specs.eta
 			self.epochs = training_specs.epochs
 			self.momentum_inertia = training_specs.momentum_inertia
@@ -61,27 +63,31 @@ class PerceptronMulticapa(object):
 			training_set = zip(X_training, Y_training)
 			validation_set = zip(X_validation, Y_validation)
 
-			training_set = self.prepare_batch_or_mini_batch_training_set(training_set, training_specs.subsets_quantity_for_minibatch)
-			
 			training_error_by_epoch = []
 			validation_error_by_epoch = []
 
-			training_subset_index = 0
-
 			error_reference_from_past = -1
 			self.error_difference_counting = 0
-
 			for _ in range(self.epochs):
-				
-				current_training_set = training_set[training_subset_index]
-				
 				if not training_specs.must_train_in_training_set_order:
-					shuffle(current_training_set)
-				
-				for x, expected in current_training_set:
-					V = self.calculate_V(x)
-					self.back_propagation(V, expected)
+					shuffle(training_set)
 
+				# divido al set de entrenamiento segun la cantidad de subconjuntos indicados
+				training_set_divided = self.prepare_batch_or_mini_batch_training_set(training_set, training_specs.subsets_quantity_for_minibatch)
+
+				# para cada subconjunto de entrenamiento voy a tener que hacer feedforward
+				# y al final aplicar back_propagation
+				for current_training_set in training_set_divided:
+					results = []
+					# hago feedforward para cada subconjunto de nuestro set de entrenamiento
+					for x, expected in current_training_set:
+						V = self.calculate_V(x)
+						# guardo los resultados obtenidos
+						results.append(V[-1])
+
+					# ya recorri todo el subconjunto, aplico back_propagation
+					self.back_propagation(V, current_training_set, results)
+					# calculo tanto el error de entrenamiento como el de validacion
 				epoch_training_error = self.calculate_error_using(current_training_set)
 				epoch_validation_error = self.calculate_error_using(validation_set)
 
@@ -99,10 +105,8 @@ class PerceptronMulticapa(object):
 				if epoch_validation_error <= training_specs.epsilon:
 					break
 
-				training_subset_index = (training_subset_index + 1) % len(training_set)
-
 			return (training_error_by_epoch,validation_error_by_epoch)
-		
+
 		def adapt_eta(self, error_reference_from_past, epoch_training_error):
 
 			if error_reference_from_past == -1:
@@ -114,7 +118,7 @@ class PerceptronMulticapa(object):
 					if self.error_difference_counting < 0:
 						#Venia una seguidilla de menos error, y ahora reseteamos.
 						return epoch_training_error
-					
+
 					self.error_difference_counting = self.error_difference_counting + 1
 
 					if self.adaptative_params.count_of_errors_straight == self.error_difference_counting:
@@ -124,12 +128,12 @@ class PerceptronMulticapa(object):
 						return 0
 				else:
 					self.error_difference_counting = self.error_difference_counting - 1
-					#Hubo menos error	
+					#Hubo menos error
 					if self.error_difference_counting > 0:
 						return epoch_training_error
-				
+
 					self.error_difference_counting = self.error_difference_counting - 1
-					
+
 					if self.adaptative_params.count_of_errors_straight == abs(self.error_difference_counting):
 						self.eta += self.adaptative_params.a
 						return epoch_training_error
@@ -173,19 +177,47 @@ class PerceptronMulticapa(object):
 			V.append(V_M)
 			return V
 
-		def back_propagation(self, V, expected):
+		def back_propagation(self, V, training, results):
 
+			# V_M va a ser el vector resultado obtenido (capa de salida)
+			# V_M_minus_1 es el resultado inmediato anterior (ultima capa oculta)
 			V_M = V[-1]
 			V_M_minus_1 = V[-2]
-			error  = np.subtract(expected,V_M)
-			current_delta = np.multiply(self.output_layer.activation_fx_derivative(np.dot(V_M_minus_1, self.output_layer.neurons_matrix)), error)
-			propagation = np.dot(current_delta, np.transpose(self.output_layer.neurons_matrix[1:]))
 
+			# como podemos estar corriendo con batch o minibaych, calculamos el error
+			# cuadratico medio y ese error obtenido lo consideramos para calcular los deltas
+			# notar que para estocastico no calculamos el error con ecm
+			ecm = 0
+			error = 0
+			if len(training) == 1:
+				error = np.subtract(training[0][1], results[0])
+			else:
+				for pattern, result in zip(training, results):
+					error = np.subtract(pattern[1], result)
+					error = np.multiply(error, error)
+					ecm += error
+				ecm = ecm/len(training)
+				error = ecm
+			# calculamos el delta como la multiplicacion (uno a uno) entre aplicarle la derivada de
+			# la funcion de activacion al resultado obtenido de la matriz de neuronas
+			# de la capa de salida y el error antes calculado
+			current_delta = np.multiply(self.output_layer.activation_fx_derivative(np.dot(V_M_minus_1, self.output_layer.neurons_matrix)), error)
+			# calculamos la propagacion como la multiplicacion entre el current_delta y la matriz
+			# traspuesta de nuestra capa de salida. Notar que tomamos la matriz de neuronas sin su bias
+			propagation = np.dot(current_delta, np.transpose(self.output_layer.neurons_matrix[1:]))
+			# calculamos la matriz con la cual vamos a actualizar la matriz de neuronas como
+			# la constante de aprendizaje por la matriz obtenida de multiplicar el resultado
+			# de la ultima capa oculta por el delta. De haber pasado como parametro un momentum
+			# mayor a 0 ademas se le restara la matriz obtenida de multiplicar el momentum por
+			# la matriz utilizada en la epoca anterior para actualizar la matriz
 			delta_W =  self.eta * np.outer(V_M_minus_1, current_delta) - (self.momentum_inertia * self.output_layer.previous_momentum_delta_W)
+			# actualizamos nuestra matriz de neuronas
 			self.output_layer.neurons_matrix += delta_W
 			self.output_layer.previous_momentum_delta_W = delta_W
+			self.output_layer.neurons_matrix
 			V_index = -2
 
+			# continuamos con el back_propagation por el resto de las capas ocultas
 			for hidden_layer in reversed(self.hidden_layers):
 				#Iteramos las capas ocultas en reversa tambien, esa es la razon del calculo del indice
 				# como ya propagamos por la capa de salida, ahora empezamos desde el -2 en V
@@ -221,11 +253,13 @@ def binary_sigmoidal_derivative(x):
 	return 2 * binary_sigmoidal(x) * (1 - binary_sigmoidal(x))
 #----------------------------------------------------------------------------------------------------------------------
 # eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch, adaptative_params (ES UNA TRIPLA)
+# pasamos la cantidad en que queremos dividir el set de entrenamiento
+# si queremos correr batch ponemos un 1
+# si queremos correr estocastico pasamos la cantidad de nuestro set
 #### Para deshabilitar parametros adaptativos poner como primer parametro del constructor un -1.
-training_specs = TrainingSpecs(0.1, 100, 0.00001, True, 0, 1, AdaptativeParameters(3, 0.001, 0.1))
 
 #para testear localmente paridad o con el ejercicio 2
-EJERCICIO = 1
+EJERCICIO = 2
 if EJERCICIO == 0:
 	#Lo necesario para el XOR.
 	X_tr = X_valid = [[-1,0,0,0], [-1,0,1,0], [-1,1,0,0] , [-1, 1,1,0],
@@ -236,8 +270,10 @@ elif EJERCICIO == 1:
                                                              f_normalize_X=normalize_standarize, f_normalize_Y=None)
 else:
     X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=80, percent_valid=10,
-                                                             f_normalize_X =None, f_normalize_Y = None)
+                                                             f_normalize_X = normalize_minmax,
+															 f_normalize_Y = normalize_minmax)
 
+training_specs = TrainingSpecs(eta, 500, 0.00001, True, 0, 400, AdaptativeParameters(-1, 0.001, 0.1))
 #Inicializamos perceptron,
 hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
 output_layer = Layer(11, 2, binary_sigmoidal, binary_sigmoidal_derivative, True)
@@ -248,7 +284,8 @@ error_by_epoch = ppm.train(X_tr, Y_tr, X_valid, Y_valid, training_specs)
 
 # Plot de error de entrenamiento
 plt.plot(range(1, len(error_by_epoch[0])+1), error_by_epoch[0], marker='o', label="Training error")
-plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Validation error")
+plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Training validation")
+
 plt.legend(loc='upper left')
 plt.annotate(error_by_epoch[0][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[0][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
 plt.annotate(error_by_epoch[1][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[1][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
