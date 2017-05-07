@@ -166,6 +166,9 @@ class PerceptronMulticapa(object):
 			validation_error_by_epoch = []
 
 			error_reference_from_past = -1
+			previous_validation_error = -1
+			consecutive_increases = 0
+			check_in = 1
 			self.error_difference_counting = 0
 			for _ in range(self.epochs):
 				if not training_specs.must_train_in_training_set_order:
@@ -202,6 +205,18 @@ class PerceptronMulticapa(object):
 				#Si el error de validacion de la epoca es menor que un EPSILON terminamos.
 				if epoch_validation_error <= training_specs.epsilon:
 					break
+				#early stopping, si el error de validacion aumenta 3 veces seguidas,
+				# tomando muestras cada 5 epocas, terminamos.
+				if check_in == 0:
+					if epoch_validation_error > previous_validation_error:
+						consecutive_increases += 1
+						if consecutive_increases == 3:
+							break
+					previous_validation_error = epoch_validation_error
+					consecutive_increases = 0
+					check_in = 5
+				else:
+					check_in -= 1
 
 			return (training_error_by_epoch,validation_error_by_epoch)
 
@@ -307,7 +322,6 @@ class PerceptronMulticapa(object):
 			# actualizamos nuestra matriz de neuronas
 			self.output_layer.neurons_matrix += delta_W
 			self.output_layer.previous_momentum_delta_W = delta_W
-			self.output_layer.neurons_matrix
 			V_index = -2
 
 			# continuamos con el back_propagation por el resto de las capas ocultas
@@ -347,3 +361,87 @@ def binary_sigmoidal_derivative(x):
 
 #----------------------------------------------------------------------------------------------------------------------
 print("Correr con -h para ver opciones")
+args = parse_arguments()
+#parametros configurables por consola   #tocar esta columna
+EJERCICIO = args.ej or 					1
+ETA = args.eta or 						0.1
+EPOCHS = args.epochs or 				100
+TRAIN_IN_ORDER = 						True 					if args.shuffle is None else args.shuffle
+MOMENTUM = args.momentum or				0
+MINIABATCH_SIZE = args.batch_size or 	-1 #-1 para estocastico, 1 para batch, n para mini batch
+ADPT_STRAIGHT_ERROR_COUNT = 			3 						if args.adapt is None else 0
+NORM_X = 								normalize_standarize 	if args.norm_x is None else args.norm_x
+NORM_Y = 								None 					if args.norm_y is None else args.norm_y
+LIST_EXISTING =							False					if args.list is None else args.list
+TEST_EXISTING = args.test or			None
+EXPORT = args.export or			        None
+#parametros no configurables por consola
+ADPT_A = 								0.001
+ADPT_BETA = 							0.1
+EPSILON = 								0.00001
+
+
+# eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch, adaptative_params (ES UNA TRIPLA)
+# pasamos la cantidad en que queremos dividir el set de entrenamiento
+# si queremos correr batch ponemos un 1
+# si queremos correr estocastico pasamos la cantidad de nuestro set
+#### Para deshabilitar parametros adaptativos poner como primer parametro del constructor un -1.
+
+training_specs = TrainingSpecs(ETA, EPOCHS, EPSILON, TRAIN_IN_ORDER, MOMENTUM, MINIABATCH_SIZE,
+							AdaptativeParameters(ADPT_STRAIGHT_ERROR_COUNT, ADPT_A, ADPT_BETA))
+
+#para testear localmente paridad o con el ejercicio 2
+if EJERCICIO == 0:
+	#Lo necesario para el XOR.
+	X_tr = X_valid = [[-1,0,0,0], [-1,0,1,0], [-1,1,0,0] , [-1, 1,1,0],
+		 [-1,0,0,1], [-1,0,1,1], [-1,1,0,1] , [-1, 1,1,1]]
+	Y_tr = Y_valid = [[0],[1],[1],[0],[1],[0],[0],[1]]
+elif EJERCICIO == 1:
+	X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej1(percent_train=80, percent_valid=10,
+                                                             f_normalize_X=NORM_X, f_normalize_Y=NORM_Y)
+else:
+    X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=80, percent_valid=10,
+                                                             f_normalize_X=NORM_X, f_normalize_Y=NORM_Y)
+
+training_specs = TrainingSpecs(ETA, EPOCHS, EPSILON, TRAIN_IN_ORDER,
+                               MOMENTUM, MINIABATCH_SIZE,
+                               AdaptativeParameters(ADPT_STRAIGHT_ERROR_COUNT, ADPT_A, ADPT_BETA))
+#Inicializamos perceptron,
+if not args.l_hidden or not args.l_output:
+	hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
+	output_layer = Layer(1+hidden_layers[-1].neurons_count, 2, binary_sigmoidal, binary_sigmoidal_derivative, True)
+else:
+	parse_layers(args, len(X_tr[0]), len(Y_tr[0]))
+	hidden_layers = args.l_hidden
+	output_layer = args.l_output
+
+if LIST_EXISTING:
+	list_trained_networks()
+elif TEST_EXISTING:
+	ppm = network_import(TEST_EXISTING)
+	err_tr  = ppm.calculate_error_using(zip(X_tr, Y_tr))
+	err_val = ppm.calculate_error_using(zip(X_valid, Y_valid))
+	err_tst = ppm.calculate_error_using(zip(X_test, Y_test))
+	print "Training Error: %s" % err_tr
+	print "Validation Error: %s" % err_val
+	print "Testing Error: %s" % err_tst
+
+else:
+	ppm = PerceptronMulticapa(hidden_layers, output_layer)
+
+	#Entrenamos y validamos.
+	error_by_epoch = ppm.train(X_tr, Y_tr, X_valid, Y_valid, training_specs)
+	if EXPORT is not None:
+		network_export(ppm, EXPORT)
+
+	# Plot de error de entrenamiento
+	plt.plot(range(1, len(error_by_epoch[0])+1), error_by_epoch[0], marker='o', label="Training error")
+	plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Training validation")
+
+	plt.legend(loc='upper left')
+	plt.annotate(error_by_epoch[0][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[0][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
+	plt.annotate(error_by_epoch[1][-1], xy = (len(error_by_epoch[0]) + 1, error_by_epoch[1][-1]), bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5))
+
+	plt.xlabel('Epoch')
+	plt.ylabel('Epoch Error')
+	plt.show()
