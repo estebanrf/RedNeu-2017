@@ -346,10 +346,10 @@ def derivative_ReLU(x, epsilon=0.1):
     return gradients
 
 def v_tanh(x): #redefinida para soportar vectores
-	return map(tanh, x)
+	return 1.7159 * map(tanh, x * (2.0/3.0))
 
 def v_tanh_deriv(x):
-    return map(lambda v: 1 - tanh(v)**2, x)
+    return map(lambda v: 1 - tanh((2.0/3.0)*v)**2, (2.0/3.0)*x)
 
 def binary_sigmoidal(x):
 	x = np.array(x)
