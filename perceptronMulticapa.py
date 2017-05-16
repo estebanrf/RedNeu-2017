@@ -346,10 +346,10 @@ def derivative_ReLU(x, epsilon=0.1):
     return gradients
 
 def v_tanh(x): #redefinida para soportar vectores
-	return 1.7159 * map(tanh, x * (2.0/3.0))
+	return np.multiply(1.7159, map(tanh, x * (2.0/3.0)))
 
 def v_tanh_deriv(x):
-    return map(lambda v: 1 - tanh((2.0/3.0)*v)**2, (2.0/3.0)*x)
+    return np.multiply(1.7159, map(lambda v: 1 - tanh((2.0/3.0)*v)**2, (2.0/3.0)*x))
 
 def binary_sigmoidal(x):
 	x = np.array(x)
@@ -382,9 +382,9 @@ EPSILON = 								0.00001
 
 
 # eta, epochs, epsilon, must_train_in_training_set_order, momentum_inertia, subsets_quantity_for_minibatch, adaptative_params (ES UNA TRIPLA)
-# pasamos la cantidad en que queremos dividir el set de entrenamiento
-# si queremos correr batch ponemos un 1
-# si queremos correr estocastico pasamos la cantidad de nuestro set
+# -1 si queremos correr estocastico
+# 1 si queremos corres batch
+# la cantidad de subconjuntos si queremos correr minibatch
 #### Para deshabilitar parametros adaptativos poner como primer parametro del constructor un -1.
 
 training_specs = TrainingSpecs(ETA, EPOCHS, EPSILON, TRAIN_IN_ORDER, MOMENTUM, MINIABATCH_SIZE,
@@ -401,7 +401,7 @@ elif EJERCICIO == 1:
                                                              f_normalize_X=NORM_X, f_normalize_Y=NORM_Y)
 else:
     X_tr, Y_tr, X_valid, Y_valid, X_test, Y_test = parse_ej2(percent_train=80, percent_valid=10,
-                                                             f_normalize_X=NORM_X, f_normalize_Y=NORM_Y)
+                                                             f_normalize_X=normalize_minmax, f_normalize_Y=normalize_minmax)
 
 training_specs = TrainingSpecs(ETA, EPOCHS, EPSILON, TRAIN_IN_ORDER,
                                MOMENTUM, MINIABATCH_SIZE,
@@ -409,7 +409,7 @@ training_specs = TrainingSpecs(ETA, EPOCHS, EPSILON, TRAIN_IN_ORDER,
 #Inicializamos perceptron,
 if not args.l_hidden or not args.l_output:
 	hidden_layers = [Layer(len(X_tr[0]), 10, binary_sigmoidal, binary_sigmoidal_derivative, True)]
-	output_layer = Layer(1+hidden_layers[-1].neurons_count, 2, binary_sigmoidal, binary_sigmoidal_derivative, True)
+	output_layer = Layer(1+hidden_layers[-1].neurons_count, 2, lambda x: x, lambda x: 1, True)
 else:
 	parse_layers(args, len(X_tr[0]), len(Y_tr[0]))
 	hidden_layers = args.l_hidden
@@ -425,7 +425,6 @@ elif TEST_EXISTING:
 	print "Training Error: %s" % err_tr
 	print "Validation Error: %s" % err_val
 	print "Testing Error: %s" % err_tst
-
 else:
 	ppm = PerceptronMulticapa(hidden_layers, output_layer)
 
@@ -435,6 +434,7 @@ else:
 		network_export(ppm, EXPORT)
 
 	# Plot de error de entrenamiento
+
 	plt.plot(range(1, len(error_by_epoch[0])+1), error_by_epoch[0], marker='o', label="Training error")
 	plt.plot(range(1, len(error_by_epoch[1])+1), error_by_epoch[1], marker='o', label="Training validation")
 
