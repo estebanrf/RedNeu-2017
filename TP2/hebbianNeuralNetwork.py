@@ -1,15 +1,9 @@
-# Redes Neuronales, DC, UBA - Primer Cuatrimestre 2017
-# Codigo template simplificado de perceptron simple escalon que resuelve el AND logico.
-# MUY IMPORTANTE: Modificar el codigo para incorporarle las mejoras especificadas en los comentarios del codigo.
-
 import numpy as np
 import matplotlib.pyplot as plt
 
 from Parser import normalize_standarize, normalize_minmax
 
-EPSILON = 0.01
-
-class PerceptronSimple(object):
+class HebbianNeuralNetwork(object):
 
 
     def __init__(self, input_size, output_size):     
@@ -17,7 +11,7 @@ class PerceptronSimple(object):
         self.w_ = np.random.rand(input_size, output_size)
         self.output_size = output_size
 
-    def train(self, X, activation_fx, activation_fx_derivative, t=1000):
+    def train(self, X, activation_fx, t=1000):
         
         while t > 0:
             eta = 1/t
@@ -47,15 +41,8 @@ class PerceptronSimple(object):
 
 X = np.array([(0,1), (0,0), (1, 0), (1, 1)])
 
-
 training_input_size = X.shape[1]
-training_output_size = Y.shape[1]
 
-ppn = PerceptronSimple(training_input_size, training_output_size)
+ppn = HebbianNeuralNetwork(training_input_size, 2)
 
-ppn.train(X, , t=1000)
-
-plt.plot(range(1, len(ppn.epoch_errors)+1), ppn.epoch_errors, marker='o')
-plt.xlabel('Epoch')
-plt.ylabel('Epoch Error')
-plt.show()
+ppn.train(X, t=1000)
