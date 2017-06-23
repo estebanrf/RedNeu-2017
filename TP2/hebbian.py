@@ -2,6 +2,11 @@ import numpy as np
 from graph_3d import plot
 import re
 
+def normalize_weights(W):
+    for w in W:
+        norm_1 = np.linalg.norm(w)
+        w /= norm_1
+
 def filter_by_categories(X, cats):
     return [t for t in X if t[0] in cats]
 
@@ -20,7 +25,8 @@ class HebbianNeuralNetwork(object):
                 y = self.predict(x[1:], (lambda d: 2*d))
                 x_aprox = self.calculate_x_aproximation(y, is_sanger) 
                 delta = eta * np.multiply(y, np.transpose(x[1:] - x_aprox))
-                self.w_ += delta          	
+                self.w_ += delta
+                normalize_weights(self.w_)
                 t = t + 1
         return self
 
@@ -49,7 +55,7 @@ X = np.loadtxt('tp2_training_dataset.csv', delimiter=',')
 
 use_sanger = True
 output_size = 3
-iterations = 100000
+iterations = 300
 
 if True: #para enterenar o importar
     hebbian = HebbianNeuralNetwork(len(X[0]) - 1, output_size)
