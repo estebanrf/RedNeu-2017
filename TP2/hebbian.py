@@ -2,17 +2,13 @@ import numpy as np
 from graph_3d import plot
 import re
 
-def normalize(V):
-    if isinstance(V[0], float):
-        norm_1 = np.linalg.norm(V)
-        V /= norm_1
-    else:
-        for v in V:
-            norm_1 = np.linalg.norm(v)
-            v /= norm_1
-
 def filter_by_categories(X, cats):
     return [t for t in X if t[0] in cats]
+
+def center(x):
+    avg = np.mean(x, axis=0)
+
+    return x - avg
 
 class HebbianNeuralNetwork(object):
 
@@ -23,16 +19,15 @@ class HebbianNeuralNetwork(object):
 
     def train(self, X, time_max=1000, is_sanger=True):
         t = 2
+        X = center(X)
         while t < time_max:
-            eta = 1./t
-            for x in X:  
+            eta = .001
+            for x in X:
                 y = self.predict(x[1:], (lambda d: 2*d))
-                normalize(y)
-                x_aprox = self.calculate_x_aproximation(y, is_sanger) 
+                x_aprox = self.calculate_x_aproximation(y, is_sanger)
                 delta = eta * np.multiply(y, np.transpose(x[1:] - x_aprox))
                 self.w_ += delta
-                normalize(self.w_)
-                t = t + 1
+                t += 1
         return self
 
     def net_input(self, x):
@@ -57,14 +52,16 @@ class HebbianNeuralNetwork(object):
 
 
 X = np.loadtxt('tp2_training_dataset.csv', delimiter=',')
+X_tr = X[:len(X)*0.9]
+X_va = X[len(X)*0.9:]
 
-use_sanger = True
+use_sanger = False
 output_size = 3
-iterations = 2000
+iterations = 5000
 
 if True: #para enterenar o importar
-    hebbian = HebbianNeuralNetwork(len(X[0]) - 1, output_size)
-    hebbian.train(X, iterations, use_sanger)
+    hebbian = HebbianNeuralNetwork(len(X_tr[0]) - 1, output_size)
+    hebbian.train(X_tr, iterations, use_sanger)
 
     if False: #para exportar
         np.savetxt('heb1.txt', hebbian.w_.flatten(), header=str(hebbian.w_.shape))
@@ -73,12 +70,12 @@ else: #importa
     with open('heb1.txt') as f:
         shape = tuple(int(num) for num in re.findall(r'\d+', f.readline()))
     w_ = np.loadtxt('heb1.txt').reshape(shape)
-    hebbian = HebbianNeuralNetwork(len(X[0]) - 1, output_size)
+    hebbian = HebbianNeuralNetwork(len(X_tr[0]) - 1, output_size)
     hebbian.w_ = w_
 
-X_3d = [np.append([x[0]], hebbian.predict(x[1:], (lambda x: 2*x))) for x in X]
-
+X_3d_tr = [np.append([x[0]], hebbian.predict(x[1:], (lambda x: 2*x))) for x in X_tr]
+X_3d_va = [np.append([x[0]], hebbian.predict(x[1:], (lambda x: 2*x))) for x in X_va]
 
 #X_3d = filter_by_categories(X_3d, [1,2,3])
-plot(X_3d)
+plot(X_3d_tr, X_3d_va)
 
