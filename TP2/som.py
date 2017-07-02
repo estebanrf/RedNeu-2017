@@ -26,7 +26,7 @@ class CompetitiveNeuralNetwork(object):
         for t in range(iterations):
             print "iteracion: "
             print t
-            for x in X[:800]:
+            for x in X[:720]:
                 winner_index = self.find_winner_neuron(x[1:], is_scalar_product)
                 self.map[winner_index][int(x[0]) - 1] += 1
                 self.update_winner_and_neighbors(winner_index, x, eta, sigma, is_scalar_product)
@@ -35,16 +35,12 @@ class CompetitiveNeuralNetwork(object):
 
         map_result = self.calculate_map(self.map)
         asserts = 0
-        for x in X[800:]:
+        for x in X[720:]:
           winner_index = self.find_winner_neuron(x[1:], is_scalar_product)
           winner_i_j = np.array([winner_index / self.m, winner_index % self.m])
-          print map_result[winner_i_j[0]][winner_i_j[1]]
-          print x[0]
           if map_result[winner_i_j[0]][winner_i_j[1]] == x[0]:
-            print 'entro'
             asserts += 1
-            print asserts
-        print asserts/100.0
+        print asserts/90.0
         return map_result
 
     def calculate_map(self, map_category):
@@ -85,9 +81,9 @@ X = main()
 X = np.resize(X, (len(X), len(X[0])))
 Y = X
 random.shuffle(Y)
-competitveNeuralNetwork = CompetitiveNeuralNetwork(len(X[0])-1, 20, 20, 9, Y[:(20*20), 1:])
+competitveNeuralNetwork = CompetitiveNeuralNetwork(len(X[0])-1, 10, 10, 9, Y[:(10*10), 1:])
 # X, is_scalar_product=False, sigma=7, tau1=(1000/math.log(5)), eta=0.01, tau2=1000, iterations=1000):
-map_result = competitveNeuralNetwork.train(X, False, 10.0, (500.0/math.log(10)), 0.1, 500.0, 500)
+map_result = competitveNeuralNetwork.train(X, False, 10.0, (150.0/math.log(10)), 0.1, 150.0, 150)
 
 plt.matshow(map_result)
 plt.show()
