@@ -66,7 +66,6 @@ class CompetitiveNeuralNetwork(object):
                 gaussian_factor = self.calculate_mexican_gaussian(sigma, winner_i_j ,np.array([i,j]))
                 delta = eta * gaussian_factor * (x[1:] - self.neurons[winner])
                 self.neurons[i * self.m + j] += delta
-                # if is_scalar_product:
                 self.neurons[i * self.m + j] /= np.linalg.norm(self.neurons[i * self.m + j])
 
     def find_winner_neuron(self, x, is_scalar_product):
@@ -82,7 +81,6 @@ X = np.resize(X, (len(X), len(X[0])))
 Y = X
 random.shuffle(Y)
 competitveNeuralNetwork = CompetitiveNeuralNetwork(len(X[0])-1, 10, 10, 9, Y[:(10*10), 1:])
-# X, is_scalar_product=False, sigma=7, tau1=(1000/math.log(5)), eta=0.01, tau2=1000, iterations=1000):
 map_result = competitveNeuralNetwork.train(X, False, 10.0, (150.0/math.log(10)), 0.1, 150.0, 150)
 
 plt.matshow(map_result)
